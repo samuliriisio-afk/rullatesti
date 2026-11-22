@@ -134,6 +134,49 @@ def make_row(key, path, res):
             "huomautus": hm}
 
 
+MERGE_FIELDS = ["rullanumero", "tilausnumero", "ex_tilausnumero", "tuotenimi", "gsm", "leveys", "halkaisija", "paino", "pituus"]
+
+
+def merge_closeup(row, res):
+    """Lähikuva voi sisältää muitakin kenttiä kuin UIB:n: täydennetään rivi niillä.
+    Lähikuva on tarkempi kuin alkuperäinen, joten sen varma luku korvaa tyhjän tai epävarman arvon."""
+    if res.get("kuvatyyppi") != "etiketti":
+        return
+    new_unc = set(res.get("epavarmat") or [])
+    unc = set(row.get("epavarmat") or [])
+    filled, confirmed, differ = [], [], []
+    for f in MERGE_FIELDS:
+        nv = res.get(f)
+        if nv in (None, ""):
+            continue
+        ov = row.get(f)
+        empty = ov in (None, "", "(ei etiketissä)")
+        if empty:
+            row[f] = nv
+            filled.append(f)
+            (unc.add if f in new_unc else unc.discard)(f)
+        elif str(ov) == str(nv):
+            if f in unc and f not in new_unc:
+                unc.discard(f)
+                confirmed.append(f)
+        elif f in new_unc:
+            continue   # lähikuvankin luku epävarma: pidetään alkuperäinen
+        else:
+            differ.append(f"{f}: alkuperäinen {ov}, lähikuva {nv}")
+            row[f] = nv
+            unc.add(f)
+    row["epavarmat"] = sorted(unc)
+    parts = []
+    if filled:
+        parts.append("Lähikuvasta täydennetty: " + ", ".join(filled) + ".")
+    if confirmed:
+        parts.append("Lähikuva varmisti: " + ", ".join(confirmed) + ".")
+    if differ:
+        parts.append("Lähikuvan luku poikkesi alkuperäisestä, käytetty lähikuvan lukua, tarkista: " + "; ".join(differ) + ".")
+    if parts:
+        row["huomautus"] = (row.get("huomautus", "") + " " + " ".join(parts)).strip()
+
+
 def build_rows(t):
     d = ld(t)
     idx = read_json(d / "indeksi.json", {"kuvat": []})
@@ -187,6 +230,7 @@ def build_rows(t):
             row.setdefault("lisakuvat", []).append({"tiedosto": im["key"], "kuva": path, "kuvaus": "lähikuva (ei luettu)"})
             continue
         row["uib"], row["uib_lahde"] = (bc or tx), ("Viivakoodi" if bc else "Teksti")
+        merge_closeup(row, res)
         retake.pop(im["kohde"], None)
         row["epavarmat"] = [e for e in row["epavarmat"] if e != "uib"] + (["uib"] if (not bc) else [])
         row["huomautus"] = row["huomautus"].replace(

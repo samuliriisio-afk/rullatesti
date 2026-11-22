@@ -44,6 +44,7 @@ TÄRKEÄÄ
 - Käyttäjä antaa viivakoodinlukijan tuloksen. Sinun tehtäväsi on lukea vain etiketin teksti; UIB-vertailun tekee ohjelma.
 - Älä koskaan muuta lukua, jotta laskennalliset tarkistukset menisivät läpi. Kirjaa se, mitä etiketissä on.
 - Jos kuva on lähikuva viivakoodista, täytä vain kuvatyyppi ja uib_teksti (jos luettavissa).
+- Jos kuva on lähempää otettu kuva etiketistä (osa etiketistä tai koko etiketti) ja siinä näkyy viivakoodin lisäksi muita etiketin kenttiä luettavasti, kuvatyyppi on "etiketti": kirjaa kaikki luettavat kentät ja uib_teksti. Täytä vain kentät, jotka erottuvat kuvassa.
 """
 
 TOOL = {
