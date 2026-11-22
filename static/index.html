@@ -75,6 +75,8 @@
   </div>
 
   <div class="kortti">
+    <div class="rivi"><input type="checkbox" id="auto" checked><label for="auto" style="margin:0;font-weight:500">Lähetä automaattisesti, kun huomautettavaa ei ole</label></div>
+    <div class="pieni-teksti" style="margin:2px 0 8px">Ota ruksi pois, jos luet kuvat useassa erässä: silloin Excel lähtee vasta kun painat "Lähetä Excel sähköpostiin".</div>
     <button class="nappi" id="laheta" type="button" disabled>Lue kuvat</button>
     <div class="pieni-teksti" style="margin-top:6px">Kuvat luetaan ensin, mutta Excel ei lähde vielä sähköpostiin. Voit lisätä puuttuvat lähikuvat ja lähettää Excelin lopuksi.</div>
     <input type="file" id="lahikamera" accept="image/*" capture="environment" class="piilo">
@@ -91,12 +93,36 @@ let asetukset = {};
 let poll = null;
 let postiKaynnissa = false;
 
+// Kuvat tallennetaan puhelimen IndexedDB-muistiin, jotta ne säilyvät, vaikka näyttö sammuu tai selain lataa sivun uudelleen
+let _db = null;
+function idb() {
+  if (_db) return _db;
+  _db = new Promise((res, rej) => {
+    const r = indexedDB.open('rullat', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kuvat', {keyPath: 'id', autoIncrement: true});
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  return _db;
+}
+async function idbTx(mode, fn) {
+  try {
+    const db = await idb();
+    return await new Promise((res, rej) => { const t = db.transaction('kuvat', mode); const rq = fn(t.objectStore('kuvat')); t.oncomplete = () => res(rq && rq.result); t.onerror = () => rej(t.error); });
+  } catch (e) { return null; }
+}
+const idbPut = k => idbTx('readwrite', s => s.put({...(k.id ? {id: k.id} : {}), file: k.file, lahetetty: !!k.lahetetty}));
+const idbDel = id => idbTx('readwrite', s => s.delete(id));
+const idbClear = () => idbTx('readwrite', s => s.clear());
+const idbAll = () => idbTx('readonly', s => s.getAll());
+
 const koodi = () => localStorage.getItem('koodi') || '';
 const hdr = () => ({'X-Koodi': koodi()});
 $('tunniste').value = localStorage.getItem('tunniste') || '';
 $('nimi').value = localStorage.getItem('nimi') || '';
 $('nimi').addEventListener('input', e => localStorage.setItem('nimi', e.target.value));
 $('koodi').value = koodi();
+$('auto').checked = localStorage.getItem('auto') !== '0';
+$('auto').addEventListener('change', e => localStorage.setItem('auto', e.target.checked ? '1' : '0'));
 $('koodi').addEventListener('input', e => localStorage.setItem('koodi', e.target.value));
 $('tunniste').addEventListener('input', e => { localStorage.setItem('tunniste', e.target.value); paivita(); });
 
@@ -123,7 +149,9 @@ async function pienenna(file, max = 2400) {
 async function lisaa(files) {
   for (const f of files) {
     const p = await pienenna(f);
-    kuvat.push({file: p, url: URL.createObjectURL(p)});
+    const k = {file: p, url: URL.createObjectURL(p), lahetetty: false};
+    kuvat.push(k);
+    k.id = await idbPut(k);
   }
   piirra();
 }
@@ -133,7 +161,7 @@ function piirra() {
   kuvat.forEach((k, i) => {
     const d = document.createElement('div'); d.className = 'kuva';
     d.innerHTML = '<img src="' + k.url + '">' + (k.lahetetty ? '<span class="ok-merkki">✓</span>' : '<button aria-label="Poista">×</button>');
-    if (!k.lahetetty) d.querySelector('button').onclick = () => { URL.revokeObjectURL(k.url); kuvat.splice(i, 1); piirra(); };
+    if (!k.lahetetty) d.querySelector('button').onclick = () => { URL.revokeObjectURL(k.url); kuvat.splice(i, 1); if (k.id) idbDel(k.id); piirra(); };
     $('kuvat').appendChild(d);
   });
   paivita();
@@ -163,13 +191,17 @@ $('laheta').onclick = async () => {
   fd.append('tunniste', t);
   fd.append('nimi', $('nimi').value.trim());
   fd.append('sposti', '0');
+  if (localStorage.getItem('kuvaTunniste') && localStorage.getItem('kuvaTunniste') !== t) {   // uusi kuorma: vanhan kuorman luetut kuvat pois listasta
+    kuvat.filter(k => k.lahetetty).forEach(k => { URL.revokeObjectURL(k.url); if (k.id) idbDel(k.id); });
+    kuvat = kuvat.filter(k => !k.lahetetty);
+  }
   const lahetettavat = kuvat.filter(k => !k.lahetetty);
   lahetettavat.forEach(k => fd.append('kuvat', k.file));
   $('laheta').disabled = true;
   naytaTulos('<div class="tila">Lähetetään kuvia…</div><div class="palkki"><div style="width:15%"></div></div>');
   try {
     const j = await lahetaKuvat('/api/laheta', fd);
-    lahetettavat.forEach(k => k.lahetetty = true); piirra();
+    lahetettavat.forEach(k => { k.lahetetty = true; idbPut(k); }); localStorage.setItem('kuvaTunniste', t); piirra();
     seuraa(j.tunniste);
   } catch (e) { naytaTulos('<div class="tila virhe">' + e.message + '</div>'); paivita(); }
 };
@@ -230,9 +262,9 @@ function piirraTulos(t, s) {
   // Lopuksi: Excel sähköpostiin. Jos huomautettavaa ei ole, lähetys tapahtuu automaattisesti.
   if (asetukset.sposti_valmis) {
     const ei_huomautettavaa = !u.length && !kk.length;
-    const auto = ei_huomautettavaa && !s.sposti;   // ei toisteta, jos jo lähetetty (tai lähetys epäonnistui)
+    const auto = $('auto').checked && ei_huomautettavaa && !s.sposti;   // ei toisteta, jos jo lähetetty (tai lähetys epäonnistui)
     h2 = '<div class="varoitus" style="border-left-color:var(--sin);background:#eef4fb"><b>' + (auto ? 'Excel lähetetään' : 'Valmis lähetettäväksi?') + '</b>' +
-      '<div class="pieni-teksti" style="margin:4px 0 8px">' + (auto ? 'Huomautettavaa ei ole, joten Excel lähtee automaattisesti osoitteeseen ' : (u.length || kk.length ? 'Lisää ensin mahdolliset lähikuvat tai uudet kuvat. ' : '') + 'Excel lähtee osoitteeseen ') + esc(asetukset.sposti) + '.</div>' +
+      '<div class="pieni-teksti" style="margin:4px 0 8px">' + (auto ? 'Huomautettavaa ei ole, joten Excel lähtee automaattisesti osoitteeseen ' : (u.length || kk.length ? 'Lisää ensin mahdolliset lähikuvat tai uudet kuvat. ' : (!$('auto').checked ? 'Lisää tarvittaessa lisää kuvia ennen lähetystä. ' : '')) + 'Excel lähtee osoitteeseen ') + esc(asetukset.sposti) + '.</div>' +
       '<button class="nappi" id="postita"' + (auto ? ' style="display:none"' : '') + '>Lähetä Excel sähköpostiin</button><div id="postiTila" class="pieni-teksti" style="margin-top:6px"></div></div>';
     $('tulos').insertAdjacentHTML('beforeend', h2);
     const laheta = async () => {
@@ -244,7 +276,7 @@ function piirraTulos(t, s) {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.virhe || ('Virhe ' + r.status));
         $('postiTila').textContent = j.sposti;
-        if (/^Lähetetty/.test(j.sposti)) { kuvat.forEach(k => URL.revokeObjectURL(k.url)); kuvat = []; piirra(); $('postita').style.display = 'none'; }
+        if (/^Lähetetty/.test(j.sposti)) { kuvat.forEach(k => URL.revokeObjectURL(k.url)); kuvat = []; idbClear(); piirra(); $('postita').style.display = 'none'; }
         else { $('postita').style.display = ''; $('postita').disabled = false; }
       } catch (e) { $('postiTila').textContent = e.message; $('postita').style.display = ''; $('postita').disabled = false; }
       postiKaynnissa = false;
@@ -273,6 +305,12 @@ $('lahikamera').onchange = async e => {
 };
 
 // Jos sivu latautui uudelleen (esim. kamera sulki selaimen taustalle), palataan kuorman tilaan
+async function palautaKuvat() {
+  const rec = (await idbAll()) || [];
+  rec.forEach(r => kuvat.push({id: r.id, file: r.file, url: URL.createObjectURL(r.file), lahetetty: !!r.lahetetty}));
+  if (rec.length) piirra();
+}
+
 async function jatka() {
   const t = $('tunniste').value.trim();
   if (!t) return;
@@ -283,6 +321,8 @@ async function jatka() {
     if (s.tila === 'valmis') piirraTulos(t, s); else if (s.tila === 'kasittelyssa') seuraa(t);
   } catch (e) {}
 }
+
+palautaKuvat();   // palauta otetut mutta lähettämättömät kuvat puhelimen muistista
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 paivita();
