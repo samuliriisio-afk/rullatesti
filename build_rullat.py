@@ -199,7 +199,7 @@ def gsm_formula(r):
     return ('SUMPRODUCT(--("0"&TRIM(MID(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(G%d&"","BIO",""),"PE","")," ",""),'
             '"+",REPT(" ",20)),({1,2,3,4,5,6}-1)*20+1,20))))' % r)
 
-def build(rows, params, out, kuorma_nimi=None, ilman_kuvia=False, arvot=False):
+def build(rows, params, out, kuorma_nimi=None, ilman_kuvia=False, arvot=False, info=None):
     wb = Workbook(); ws = wb.active; ws.title = 'Rullat'; wk = wb.create_sheet('Kuvat')
     n = len(rows); L = n + 1
     R_NOTE, R_ST, R_PAR, R_AST, R_AN = L + 2, L + 4, L + 9, L + 14, L + 18
@@ -326,6 +326,15 @@ def build(rows, params, out, kuorma_nimi=None, ilman_kuvia=False, arvot=False):
         ws.conditional_formatting.add(rng('S'), FormulaRule(formula=['$S2="OK"'], fill=FILL_GREEN))
         ws.conditional_formatting.add(rng('S'), FormulaRule(formula=['$S2<>"OK"'], fill=FILL_RED))
     Path(out).parent.mkdir(parents=True, exist_ok=True)
+    if info:   # Tiedot-välilehti: kuorman perustiedot (nimi tulee vain Excel-liitteeseen)
+        wt = wb.create_sheet('Tiedot')
+        wt.column_dimensions['A'].width = 24; wt.column_dimensions['B'].width = 42
+        for i, (k, v) in enumerate(info, 1):
+            a = wt.cell(i, 1, k); a.font = Font(bold=True)
+            wt.cell(i, 2, v)
+        nimi = dict(info).get('Nimi')
+        if nimi:
+            wb.properties.creator = nimi
     wb.save(out)
 
 def merge(rows, new, replace=False):

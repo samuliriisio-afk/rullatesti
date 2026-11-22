@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f4e79">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<title>Rullat Exceliin</title>
+<style>
+  :root { --sin:#1f4e79; --vihr:#2e7d32; --pun:#c62828; --kelt:#f9a825; --harm:#f3f4f6; --raja:#d0d5dd; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--harm); color:#1a1a1a; padding-bottom:90px; }
+  header { background:var(--sin); color:#fff; padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top)); font-size:19px; font-weight:600; }
+  main { padding:14px; max-width:640px; margin:0 auto; }
+  .kortti { background:#fff; border:1px solid var(--raja); border-radius:12px; padding:14px; margin-bottom:14px; }
+  label { display:block; font-weight:600; margin:0 0 6px; }
+  input[type=text], input[type=password] { width:100%; padding:12px; font-size:17px; border:1px solid var(--raja); border-radius:8px; }
+  .nappi { display:block; width:100%; padding:15px; font-size:18px; font-weight:600; border:0; border-radius:10px; background:var(--sin); color:#fff; text-align:center; margin-top:10px; cursor:pointer; }
+  .nappi.toissij { background:#fff; color:var(--sin); border:2px solid var(--sin); }
+  .nappi.pieni { padding:9px; font-size:15px; margin-top:6px; }
+  .nappi[disabled] { opacity:.5; }
+  .kuvat { display:grid; grid-template-columns:repeat(auto-fill,minmax(88px,1fr)); gap:8px; margin-top:12px; }
+  .kuva { position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; border:1px solid var(--raja); background:#ddd; }
+  .kuva img { width:100%; height:100%; object-fit:cover; }
+  .kuva button { position:absolute; top:3px; right:3px; width:28px; height:28px; border-radius:50%; border:0; background:rgba(0,0,0,.65); color:#fff; font-size:16px; }
+  .rivi { display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .rivi input[type=checkbox] { width:22px; height:22px; }
+  .tila { font-weight:600; }
+  .ok { color:var(--vihr); } .virhe { color:var(--pun); }
+  .palkki { height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; margin-top:8px; }
+  .palkki div { height:100%; background:var(--sin); width:0; transition:width .3s; }
+  ul { padding-left:20px; margin:6px 0; }
+  li { margin:4px 0; }
+  .pieni-teksti { color:#555; font-size:14px; }
+  .varoitus { border-left:5px solid var(--kelt); background:#fff8e1; padding:10px 12px; border-radius:6px; margin-top:10px; }
+  .lahikuva { border:1px dashed var(--raja); border-radius:8px; padding:10px; margin-top:8px; }
+  .piilo { display:none; }
+</style>
+</head>
+<body>
+<header>Rullat Exceliin</header>
+<main>
+
+  <div class="kortti piilo" id="koodiKortti">
+    <label for="koodi">Käyttökoodi</label>
+    <input type="password" id="koodi" autocomplete="current-password">
+    <div class="pieni-teksti" style="margin-top:6px">Tallennetaan tähän puhelimeen.</div>
+  </div>
+
+  <div class="kortti">
+    <label for="tunniste">Kuorman tunniste</label>
+    <input type="text" id="tunniste" placeholder="esim. FFF111" autocapitalize="characters" autocomplete="off">
+    <div class="pieni-teksti" style="margin-top:6px">Yksi kuorma = yksi Excel. Sama tunniste lisää kuvia samaan kuormaan.</div>
+    <label for="nimi" style="margin-top:14px">Nimi</label>
+    <input type="text" id="nimi" placeholder="esim. Samuli Riisiö" autocomplete="name">
+    <div class="pieni-teksti" style="margin-top:6px">Tulee vain Excel-liitteeseen (Tiedot-välilehti).</div>
+  </div>
+
+  <div class="kortti">
+    <label>Kuvat</label>
+    <button class="nappi" id="otaKuva" type="button">📷 Ota kuva</button>
+    <button class="nappi toissij" id="valitse" type="button">Valitse galleriasta</button>
+    <input type="file" id="kamera" accept="image/*" capture="environment" class="piilo">
+    <input type="file" id="galleria" accept="image/*" multiple class="piilo">
+    <div class="pieni-teksti" style="margin-top:8px">Kuvaa jokaisen rullan etiketti kokonaan ja suoraan edestä, niin että viivakoodi on terävä. Etiketistä voi ottaa useita kuvia, ja sama rulla tunnistetaan viivakoodista.</div>
+    <div class="kuvat" id="kuvat"></div>
+  </div>
+
+  <div class="kortti">
+    <div class="rivi"><input type="checkbox" id="sposti" checked><label for="sposti" style="margin:0;font-weight:500">Lähetä Excel sähköpostiin <span id="osoite" class="pieni-teksti"></span></label></div>
+    <button class="nappi" id="laheta" type="button" disabled>Lähetä ja tee Excel</button>
+  </div>
+
+  <div class="kortti piilo" id="tulos"></div>
+  <div class="pieni-teksti" id="tekija" style="text-align:center;margin:18px 0 6px"></div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let kuvat = [];            // {file, url}
+let asetukset = {};
+let poll = null;
+
+const koodi = () => localStorage.getItem('koodi') || '';
+const hdr = () => ({'X-Koodi': koodi()});
+$('tunniste').value = localStorage.getItem('tunniste') || '';
+$('nimi').value = localStorage.getItem('nimi') || '';
+$('nimi').addEventListener('input', e => localStorage.setItem('nimi', e.target.value));
+$('koodi').value = koodi();
+$('koodi').addEventListener('input', e => localStorage.setItem('koodi', e.target.value));
+$('tunniste').addEventListener('input', e => { localStorage.setItem('tunniste', e.target.value); paivita(); });
+
+fetch('/api/asetukset').then(r => r.json()).then(a => {
+  asetukset = a;
+  if (a.koodi_vaaditaan) $('koodiKortti').classList.remove('piilo');
+  $('tekija').textContent = [a.tekija, a.versio ? 'versio ' + a.versio : ''].filter(Boolean).join(' · ');
+  $('osoite').textContent = '(' + a.sposti + ')';
+  if (!a.sposti_valmis) { $('sposti').checked = false; $('osoite').textContent = '(sähköpostia ei ole määritetty palvelimella)'; }
+});
+
+// kuvien pienennys: iso kuva -> max 2400 px, jotta lataus on nopea mutta viivakoodi pysyy luettavana
+async function pienenna(file, max = 2400) {
+  try {
+    const bmp = await createImageBitmap(file, {imageOrientation: 'from-image'});
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+    return new File([blob], (file.name || 'kuva').replace(/\.\w+$/, '') + '.jpg', {type: 'image/jpeg'});
+  } catch (e) { return file; }
+}
+
+async function lisaa(files) {
+  for (const f of files) {
+    const p = await pienenna(f);
+    kuvat.push({file: p, url: URL.createObjectURL(p)});
+  }
+  piirra();
+}
+
+function piirra() {
+  $('kuvat').innerHTML = '';
+  kuvat.forEach((k, i) => {
+    const d = document.createElement('div'); d.className = 'kuva';
+    d.innerHTML = '<img src="' + k.url + '"><button aria-label="Poista">×</button>';
+    d.querySelector('button').onclick = () => { URL.revokeObjectURL(k.url); kuvat.splice(i, 1); piirra(); };
+    $('kuvat').appendChild(d);
+  });
+  paivita();
+}
+function paivita() {
+  $('laheta').disabled = !(kuvat.length && $('tunniste').value.trim());
+  $('laheta').textContent = kuvat.length ? 'Lähetä ' + kuvat.length + ' kuvaa ja tee Excel' : 'Lähetä ja tee Excel';
+}
+
+$('otaKuva').onclick = () => $('kamera').click();
+$('valitse').onclick = () => $('galleria').click();
+$('kamera').onchange = e => { lisaa([...e.target.files]); e.target.value = ''; };
+$('galleria').onchange = e => { lisaa([...e.target.files]); e.target.value = ''; };
+
+async function lahetaKuvat(url, lomake) {
+  const r = await fetch(url, {method: 'POST', headers: hdr(), body: lomake});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.virhe || ('Virhe ' + r.status));
+  return j;
+}
+
+$('laheta').onclick = async () => {
+  const t = $('tunniste').value.trim();
+  const fd = new FormData();
+  fd.append('tunniste', t);
+  fd.append('nimi', $('nimi').value.trim());
+  fd.append('sposti', $('sposti').checked ? '1' : '0');
+  kuvat.forEach(k => fd.append('kuvat', k.file));
+  $('laheta').disabled = true;
+  naytaTulos('<div class="tila">Lähetetään kuvia…</div><div class="palkki"><div style="width:15%"></div></div>');
+  try {
+    const j = await lahetaKuvat('/api/laheta', fd);
+    kuvat = []; piirra();
+    seuraa(j.tunniste);
+  } catch (e) { naytaTulos('<div class="tila virhe">' + e.message + '</div>'); paivita(); }
+};
+
+function naytaTulos(html) { $('tulos').classList.remove('piilo'); $('tulos').innerHTML = html; $('tulos').scrollIntoView({behavior: 'smooth'}); }
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function seuraa(t) {
+  clearInterval(poll);
+  const tick = async () => {
+    const r = await fetch('/api/kuorma/' + encodeURIComponent(t) + '/tila', {headers: hdr()});
+    if (r.status === 401) { clearInterval(poll); naytaTulos('<div class="tila virhe">Väärä käyttökoodi</div>'); return; }
+    const s = await r.json();
+    if (s.tila === 'kasittelyssa') {
+      const [a, b] = (s.edistyminen || '0/0').split('/').map(Number);
+      const pros = b ? Math.max(15, Math.round(100 * a / b)) : 15;
+      naytaTulos('<div class="tila">Luetaan etikettejä… ' + (s.edistyminen || '') + '</div><div class="palkki"><div style="width:' + pros + '%"></div></div><div class="pieni-teksti" style="margin-top:6px">Kestää noin 10–20 s per kuva. Voit jättää sivun auki.</div>');
+    } else if (s.tila === 'valmis') { clearInterval(poll); piirraTulos(t, s); }
+    else if (s.tila === 'virhe') { clearInterval(poll); naytaTulos('<div class="tila virhe">' + esc(s.virhe) + '</div>'); paivita(); }
+  };
+  tick(); poll = setInterval(tick, 2500);
+}
+
+function piirraTulos(t, s) {
+  const y = s.yhteenveto;
+  let h = '<div class="tila ok">Valmis: ' + y.rullia + ' rullaa, ' + y.paino_yht + ' kg</div>';
+  if (s.sposti) h += '<div class="pieni-teksti" style="margin-top:4px">' + esc(s.sposti) + '</div>';
+  h += '<button class="nappi" id="lataa">Lataa Excel</button>';
+  if (y.ilman_uib.length) {
+    h += '<div class="varoitus"><b>UIB puuttuu ' + y.ilman_uib.length + ' rullalta.</b> Ota viivakoodista lähikuva suoraan edestä:';
+    y.ilman_uib.forEach(x => {
+      h += '<div class="lahikuva">Rulla ' + esc(x.rulla || '?') + ' (kuva ' + esc(x.kuva) + ')<button class="nappi pieni toissij" data-kuva="' + esc(x.kuva) + '">📷 Lisää lähikuva</button></div>';
+    });
+    h += '</div>';
+  }
+  if (y.tarkistettavat.length) h += '<div class="varoitus"><b>Tarkistettavat rivit</b><ul>' + y.tarkistettavat.map(x => '<li>' + esc(x.rulla) + ': ' + esc(x.syy) + '</li>').join('') + '</ul></div>';
+  if (y.paino_ei_ok.length) h += '<div class="varoitus"><b>Automaattitarkistus ei mennyt läpi</b><ul>' + y.paino_ei_ok.map(x => '<li>' + esc(x.rulla) + ': ' + esc(x.syy) + '</li>').join('') + '</ul></div>';
+  if (y.huomiot.length) h += '<div class="varoitus"><b>Huomiot</b><ul>' + y.huomiot.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
+  naytaTulos(h);
+  $('lataa').onclick = async () => {
+    const r = await fetch('/api/kuorma/' + encodeURIComponent(t) + '/excel', {headers: hdr()});
+    const b = await r.blob(); const a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = 'kuorma_' + t + '.xlsx'; a.click();
+  };
+  document.querySelectorAll('[data-kuva]').forEach(btn => btn.onclick = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+    inp.onchange = async () => {
+      const f = await pienenna(inp.files[0], 3000);
+      const fd = new FormData(); fd.append('rivi', btn.dataset.kuva); fd.append('kuva', f); fd.append('sposti', $('sposti').checked ? '1' : '0');
+      naytaTulos('<div class="tila">Lähetetään lähikuvaa…</div>');
+      try { await lahetaKuvat('/api/kuorma/' + encodeURIComponent(t) + '/lahikuva', fd); seuraa(t); }
+      catch (e) { naytaTulos('<div class="tila virhe">' + esc(e.message) + '</div>'); }
+    };
+    inp.click();
+  });
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+paivita();
+</script>
+</body>
+</html>

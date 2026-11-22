@@ -1,9 +1,11 @@
 """Rullaetiketit -> Excel: Flask-palvelin. Käynnistys: gunicorn -w 1 --threads 8 -b 0.0.0.0:8000 app:app"""
+import envload  # noqa: F401  (lukee .env ensin)
 import hmac, os, threading
 from pathlib import Path
 from flask import Flask, jsonify, request, send_file, send_from_directory, abort
 
 import mailer, pipeline as P
+from version import VERSION
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024
@@ -39,7 +41,8 @@ def sw():
 
 @app.get("/api/asetukset")
 def settings():
-    return jsonify(koodi_vaaditaan=bool(APP_CODE), sposti=mailer.MAIL_TO, sposti_valmis=mailer.configured())
+    return jsonify(koodi_vaaditaan=bool(APP_CODE), sposti=mailer.MAIL_TO, sposti_valmis=mailer.configured(),
+                   tekija=os.environ.get("TEKIJA") or "Samuli Riisiö", versio=VERSION)
 
 
 def start(t, send_mail):
@@ -63,6 +66,9 @@ def upload():
         except Exception:
             return jsonify(virhe=f"Kuvaa {f.filename} ei voitu avata"), 400
     send_mail = request.form.get("sposti", "1") == "1"
+    nimi = request.form.get("nimi", "").strip()[:80]
+    if nimi:
+        P.set_meta(t, nimi=nimi)
     P.set_status(t, tila="kasittelyssa", edistyminen="0/0")
     start(t, send_mail)
     return jsonify(tunniste=t, lisatty=added)

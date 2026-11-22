@@ -1,11 +1,14 @@
 """Kuorman käsittely: kuvat -> luku (viivakoodi + Claude) -> rivit -> Excel -> yhteenveto -> sähköposti."""
 import hashlib, io, json, os, re, threading, time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
 import bardecode, build_rullat as B, extract as X, mailer
+from version import VERSION
 
 DATA = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data")) / "kuormat"
 PLACEHOLDER = "EI-LUETTAVISSA-"
@@ -56,6 +59,14 @@ def set_status(t, **kw):
         st.update(kw)
         st["paivitetty"] = time.time()
         write_json(d / "tila.json", st)
+
+
+def set_meta(t, **kw):
+    d = ld(t)
+    with _wlock2:
+        m = read_json(d / "meta.json", {})
+        m.update(kw)
+        write_json(d / "meta.json", m)
 
 
 def get_status(t):
@@ -171,13 +182,19 @@ def build_rows(t):
     return rows, attach, notes
 
 
+def make_info(t, kuorma_nimi):
+    meta = read_json(ld(t) / "meta.json", {})
+    return [("Kuorma", kuorma_nimi), ("Nimi", meta.get("nimi") or ""),
+            ("Luotu", datetime.now(ZoneInfo("Europe/Helsinki")).strftime("%Y-%m-%d %H:%M")), ("Sovelluksen versio", VERSION)]
+
+
 def build_excel(t, rows, attach, kuorma_nimi):
     out = ld(t) / f"kuorma_{t}.xlsx"
     params = dict(B.DEFAULTS)
     new = [B.norm_row(r) for r in rows] + [B.norm_row(a) for a in attach]
     merged = []
     warn = [e for e in B.merge(merged, new)]
-    B.build(merged, params, str(out), kuorma_nimi)
+    B.build(merged, params, str(out), kuorma_nimi, info=make_info(t, kuorma_nimi))
     return out, merged, warn, params
 
 
@@ -268,7 +285,7 @@ def process_load(t, laheta_posti=True):
                 attach_path = out
                 if size_mb > 20:  # liian iso liite: lähetä kevyt versio ilman kuvia
                     light = d / f"kuorma_{t}_kevyt.xlsx"
-                    B.build(merged, params, str(light), t, ilman_kuvia=True)
+                    B.build(merged, params, str(light), t, ilman_kuvia=True, info=make_info(t, t))
                     attach_path = light
                 mailer.send(f"Rullakuorma {t}: {summary['rullia']} rullaa" + ("" if first else " (päivitetty)"),
                             mail_text(t, summary, not first), str(attach_path))
