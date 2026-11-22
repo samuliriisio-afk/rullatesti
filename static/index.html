@@ -187,23 +187,25 @@ function piirraTulos(t, s) {
   const y = s.yhteenveto;
   let h = '<div class="tila ok">Valmis: ' + y.rullia + ' rullaa, ' + y.paino_yht + ' kg</div>';
   if (s.sposti) h += '<div class="pieni-teksti" style="margin-top:4px">' + esc(s.sposti) + '</div>';
-  h += '<button class="nappi" id="lataa">Lataa Excel</button>';
-  if (y.ilman_uib.length) {
-    h += '<div class="varoitus"><b>UIB puuttuu ' + y.ilman_uib.length + ' rullalta.</b> Ota viivakoodista lähikuva suoraan edestä:';
-    y.ilman_uib.forEach(x => {
-      h += '<div class="lahikuva">Rulla ' + esc(x.rulla || '?') + ' (kuva ' + esc(x.kuva) + ')<button class="nappi pieni toissij" data-kuva="' + esc(x.kuva) + '">📷 Lisää lähikuva</button></div>';
+  // Excelin lataus on piilotettu kuvaajalta: Excel tulee sähköpostiin.
+  const kk = y.kaksoiskuvat || [];
+  if (kk.length) {
+    h += '<div class="varoitus"><b>Sama rulla kuvattu useammin kuin kerran</b>';
+    kk.forEach(x => { h += '<div class="lahikuva">' + (x.rulla ? 'Rulla ' + esc(x.rulla) : 'Yksi rulla') + ': ' + x.kuvia + ' kuvaa. Tarkista ettei jokin toinen rulla jäänyt kuvaamatta.</div>'; });
+    h += '</div>';
+  }
+  // Kuvaajalle näytetään vain asiat, jotka korjaantuvat kuvaamalla uudelleen. Muut tiedot menevät sähköpostin Exceliin.
+  const u = y.uudelleen || [];
+  if (u.length) {
+    h += '<div class="varoitus"><b>Kuvaa uudelleen (' + u.length + ')</b>';
+    u.forEach(x => {
+      h += '<div class="lahikuva">' + (x.rulla ? 'Rulla ' + esc(x.rulla) + ' ' : '') + '(kuva ' + esc(x.kuva) + '): ' + esc(x.syy) + '.' +
+        (x.nappi ? '<button class="nappi pieni toissij" data-kuva="' + esc(x.kuva) + '">📷 Lisää lähikuva viivakoodista</button>'
+                 : '<div class="pieni-teksti">Ota tästä uusi kuva ja lähetä se samalla kuorman tunnisteella.</div>') + '</div>';
     });
     h += '</div>';
   }
-  if (y.tarkistettavat.length) h += '<div class="varoitus"><b>Tarkistettavat rivit</b><ul>' + y.tarkistettavat.map(x => '<li>' + esc(x.rulla) + ': ' + esc(x.syy) + '</li>').join('') + '</ul></div>';
-  if (y.paino_ei_ok.length) h += '<div class="varoitus"><b>Automaattitarkistus ei mennyt läpi</b><ul>' + y.paino_ei_ok.map(x => '<li>' + esc(x.rulla) + ': ' + esc(x.syy) + '</li>').join('') + '</ul></div>';
-  if (y.huomiot.length) h += '<div class="varoitus"><b>Huomiot</b><ul>' + y.huomiot.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>';
   naytaTulos(h);
-  $('lataa').onclick = async () => {
-    const r = await fetch('/api/kuorma/' + encodeURIComponent(t) + '/excel', {headers: hdr()});
-    const b = await r.blob(); const a = document.createElement('a');
-    a.href = URL.createObjectURL(b); a.download = 'kuorma_' + t + '.xlsx'; a.click();
-  };
   document.querySelectorAll('[data-kuva]').forEach(btn => btn.onclick = () => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
     inp.onchange = async () => {
