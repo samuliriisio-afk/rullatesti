@@ -35,8 +35,12 @@
   li { margin:4px 0; }
   .pieni-teksti { color:#555; font-size:14px; }
   .varoitus { border-left:5px solid var(--kelt); background:#fff8e1; padding:10px 12px; border-radius:6px; margin-top:10px; }
-  .lahikuva { border:1px dashed var(--raja); border-radius:8px; padding:10px; margin-top:8px; }
+  .lahikuva { border:1px dashed var(--raja); border-radius:8px; padding:10px; margin-top:8px; overflow:auto; }
   .piilo { display:none; }
+  .maara { font-weight:700; font-size:17px; margin-top:10px; }
+  .mini { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--raja); background:#eee; cursor:zoom-in; float:left; margin:0 10px 6px 0; }
+  .iso { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:50; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .iso img { max-width:100%; max-height:100%; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -65,6 +69,7 @@
     <input type="file" id="kamera" accept="image/*" capture="environment" class="piilo">
     <input type="file" id="galleria" accept="image/*" multiple class="piilo">
     <div class="pieni-teksti" style="margin-top:8px">Kuvaa jokaisen rullan etiketti kokonaan ja suoraan edestä, niin että viivakoodi on terävä. Etiketistä voi ottaa useita kuvia, ja sama rulla tunnistetaan viivakoodista.</div>
+    <div class="maara" id="maara"></div>
     <div class="kuvat" id="kuvat"></div>
   </div>
 
@@ -132,6 +137,7 @@ function piirra() {
   paivita();
 }
 function paivita() {
+  $('maara').textContent = kuvat.length ? 'Valittu ' + kuvat.length + (kuvat.length === 1 ? ' kuva' : ' kuvaa') : 'Ei kuvia valittu';
   $('laheta').disabled = !(kuvat.length && $('tunniste').value.trim());
   $('laheta').textContent = kuvat.length ? 'Lähetä ' + kuvat.length + ' kuvaa ja tee Excel' : 'Lähetä ja tee Excel';
 }
@@ -199,13 +205,24 @@ function piirraTulos(t, s) {
   if (u.length) {
     h += '<div class="varoitus"><b>Kuvaa uudelleen (' + u.length + ')</b>';
     u.forEach(x => {
-      h += '<div class="lahikuva">' + (x.rulla ? 'Rulla ' + esc(x.rulla) + ' ' : '') + '(kuva ' + esc(x.kuva) + '): ' + esc(x.syy) + '.' +
+      h += '<div class="lahikuva"><img class="mini" data-esik="' + esc(x.kuva) + '" alt="Kuva ' + esc(x.kuva) + '">' + (x.rulla ? 'Rulla ' + esc(x.rulla) + ' ' : '') + '(kuva ' + esc(x.kuva) + '): ' + esc(x.syy) + '.' +
         (x.nappi ? '<button class="nappi pieni toissij" data-kuva="' + esc(x.kuva) + '">📷 Lisää lähikuva viivakoodista</button>'
                  : '<div class="pieni-teksti">Ota tästä uusi kuva ja lähetä se samalla kuorman tunnisteella.</div>') + '</div>';
     });
     h += '</div>';
   }
   naytaTulos(h);
+  document.querySelectorAll('img[data-esik]').forEach(async im => {
+    const k = im.dataset.esik, u = '/api/kuorma/' + encodeURIComponent(t) + '/kuva/' + encodeURIComponent(k);
+    const hae = async q => URL.createObjectURL(await (await fetch(u + q, {headers: hdr()})).blob());
+    try { im.src = await hae('?koko=pieni'); } catch (e) { im.style.display = 'none'; return; }
+    im.onclick = async () => {
+      const o = document.createElement('div'); o.className = 'iso';
+      const g = document.createElement('img'); g.src = im.src; o.appendChild(g);
+      o.onclick = () => o.remove(); document.body.appendChild(o);
+      try { g.src = await hae('?koko=iso'); } catch (e) {}
+    };
+  });
   document.querySelectorAll('[data-kuva]').forEach(btn => btn.onclick = () => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
     inp.onchange = async () => {
