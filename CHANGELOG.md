@@ -8,6 +8,10 @@ Numero on tiedostossa `version.py` ja näkyy sovelluksen alareunassa sekä Excel
 - Lukuohjeeseen lisätty sääntö: lähempää otettu etiketin kuva, jossa on muitakin kenttiä, luetaan etiketiksi.
 - Automaattinen lähetys: jos ruudulla ei ole huomautettavaa (ei "Kuvaa uudelleen" eikä "Sama rulla kuvattu useammin kuin kerran"), Excel lähtee sähköpostiin ilman painallusta. Jos huomautuksia on, "Lähetä Excel sähköpostiin" -painike jää käyttöön. Jo lähetettyä tilaa ei lähetetä uudelleen sivun päivityksessä, ja epäonnistunut lähetys ei toistu itsestään.
 
+## 0.18 (lisäys)
+- Valintaruutu "Lähetä automaattisesti, kun huomautettavaa ei ole" (oletuksena päällä, valinta jää puhelimen muistiin). Ruksi pois: Excel lähtee vain painikkeesta.
+- Otetut kuvat tallennetaan puhelimen muistiin (IndexedDB): lähettämättömät ja luetut kuvat säilyvät, vaikka näyttö sammuu tai selain lataa sivun uudelleen. Muisti tyhjenee, kun Excel on lähetetty. Kun aloitat uuden kuorman (eri tunniste), vanhan kuorman luetut kuvat poistuvat listalta.
+
 ## 0.17
 - Uusi kulku: kuvat luetaan ensin ("Lue kuvat"), eikä Excel lähde vielä sähköpostiin. Kuvat pysyvät sovelluksessa (✓ = luettu), ja lähikuvat voi lisätä ennen lopullista lähetystä. Excel lähtee vasta painikkeesta "Lähetä Excel sähköpostiin".
 - Lähikuvan otto korjattu: tiedostokenttä on aina sivulla (aiemmin se luotiin napautuksessa ja valinta saattoi kadota kameran avautuessa). Jos sivu latautuu uudelleen kameran jälkeen, sovellus palaa kuorman tilaan tunnisteen perusteella.
