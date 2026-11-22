@@ -108,4 +108,3 @@ def extract(path, barcode_text=""):
                 raise RuntimeError(f"API-virhe {r.status_code}: {r.text[:300]}")
         time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"Clauden kutsu epäonnistui: {last}")
-    raise RuntimeError(f"Clauden kutsu epäonnistui: {last}")
