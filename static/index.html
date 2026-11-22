@@ -39,6 +39,7 @@
   .piilo { display:none; }
   .maara { font-weight:700; font-size:17px; margin-top:10px; }
   .mini { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--raja); background:#eee; cursor:zoom-in; float:left; margin:0 10px 6px 0; }
+  .ok-merkki { position:absolute; top:4px; right:4px; background:var(--vihr); color:#fff; border-radius:50%; width:22px; height:22px; text-align:center; line-height:22px; font-size:14px; }
   .iso { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:50; display:flex; align-items:center; justify-content:center; padding:10px; }
   .iso img { max-width:100%; max-height:100%; border-radius:6px; }
 </style>
@@ -74,8 +75,9 @@
   </div>
 
   <div class="kortti">
-    <div class="rivi"><input type="checkbox" id="sposti" checked><label for="sposti" style="margin:0;font-weight:500">Lähetä Excel sähköpostiin <span id="osoite" class="pieni-teksti"></span></label></div>
-    <button class="nappi" id="laheta" type="button" disabled>Lähetä ja tee Excel</button>
+    <button class="nappi" id="laheta" type="button" disabled>Lue kuvat</button>
+    <div class="pieni-teksti" style="margin-top:6px">Kuvat luetaan ensin, mutta Excel ei lähde vielä sähköpostiin. Voit lisätä puuttuvat lähikuvat ja lähettää Excelin lopuksi.</div>
+    <input type="file" id="lahikamera" accept="image/*" capture="environment" class="piilo">
   </div>
 
   <div class="kortti piilo" id="tulos"></div>
@@ -101,8 +103,7 @@ fetch('/api/asetukset').then(r => r.json()).then(a => {
   asetukset = a;
   if (a.koodi_vaaditaan) $('koodiKortti').classList.remove('piilo');
   $('tekija').textContent = [a.tekija, a.versio ? 'versio ' + a.versio : ''].filter(Boolean).join(' · ');
-  $('osoite').textContent = '(' + a.sposti + ')';
-  if (!a.sposti_valmis) { $('sposti').checked = false; $('osoite').textContent = '(sähköpostia ei ole määritetty palvelimella)'; }
+  jatka();
 });
 
 // kuvien pienennys: iso kuva -> max 2400 px, jotta lataus on nopea mutta viivakoodi pysyy luettavana
@@ -130,16 +131,17 @@ function piirra() {
   $('kuvat').innerHTML = '';
   kuvat.forEach((k, i) => {
     const d = document.createElement('div'); d.className = 'kuva';
-    d.innerHTML = '<img src="' + k.url + '"><button aria-label="Poista">×</button>';
-    d.querySelector('button').onclick = () => { URL.revokeObjectURL(k.url); kuvat.splice(i, 1); piirra(); };
+    d.innerHTML = '<img src="' + k.url + '">' + (k.lahetetty ? '<span class="ok-merkki">✓</span>' : '<button aria-label="Poista">×</button>');
+    if (!k.lahetetty) d.querySelector('button').onclick = () => { URL.revokeObjectURL(k.url); kuvat.splice(i, 1); piirra(); };
     $('kuvat').appendChild(d);
   });
   paivita();
 }
 function paivita() {
-  $('maara').textContent = kuvat.length ? 'Valittu ' + kuvat.length + (kuvat.length === 1 ? ' kuva' : ' kuvaa') : 'Ei kuvia valittu';
-  $('laheta').disabled = !(kuvat.length && $('tunniste').value.trim());
-  $('laheta').textContent = kuvat.length ? 'Lähetä ' + kuvat.length + ' kuvaa ja tee Excel' : 'Lähetä ja tee Excel';
+  const uudet = kuvat.filter(k => !k.lahetetty).length, luetut = kuvat.length - uudet;
+  $('maara').textContent = kuvat.length ? 'Valittu ' + kuvat.length + (kuvat.length === 1 ? ' kuva' : ' kuvaa') + (luetut ? ' (luettu ' + luetut + ', uusia ' + uudet + ')' : '') : 'Ei kuvia valittu';
+  $('laheta').disabled = !(uudet && $('tunniste').value.trim());
+  $('laheta').textContent = uudet ? 'Lue ' + uudet + (uudet === 1 ? ' kuva' : ' kuvaa') : 'Lue kuvat';
 }
 
 $('otaKuva').onclick = () => $('kamera').click();
@@ -159,13 +161,14 @@ $('laheta').onclick = async () => {
   const fd = new FormData();
   fd.append('tunniste', t);
   fd.append('nimi', $('nimi').value.trim());
-  fd.append('sposti', $('sposti').checked ? '1' : '0');
-  kuvat.forEach(k => fd.append('kuvat', k.file));
+  fd.append('sposti', '0');
+  const lahetettavat = kuvat.filter(k => !k.lahetetty);
+  lahetettavat.forEach(k => fd.append('kuvat', k.file));
   $('laheta').disabled = true;
   naytaTulos('<div class="tila">Lähetetään kuvia…</div><div class="palkki"><div style="width:15%"></div></div>');
   try {
     const j = await lahetaKuvat('/api/laheta', fd);
-    kuvat = []; piirra();
+    lahetettavat.forEach(k => k.lahetetty = true); piirra();
     seuraa(j.tunniste);
   } catch (e) { naytaTulos('<div class="tila virhe">' + e.message + '</div>'); paivita(); }
 };
@@ -191,7 +194,7 @@ function seuraa(t) {
 
 function piirraTulos(t, s) {
   const y = s.yhteenveto;
-  let h = '<div class="tila ok">Valmis: ' + y.rullia + ' rullaa, ' + y.paino_yht + ' kg</div>';
+  let h2, h = '<div class="tila ok">Valmis: ' + y.rullia + ' rullaa, ' + y.paino_yht + ' kg</div>';
   if (s.sposti) h += '<div class="pieni-teksti" style="margin-top:4px">' + esc(s.sposti) + '</div>';
   // Excelin lataus on piilotettu kuvaajalta: Excel tulee sähköpostiin.
   const kk = y.kaksoiskuvat || [];
@@ -223,17 +226,53 @@ function piirraTulos(t, s) {
       try { g.src = await hae('?koko=iso'); } catch (e) {}
     };
   });
-  document.querySelectorAll('[data-kuva]').forEach(btn => btn.onclick = () => {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
-    inp.onchange = async () => {
-      const f = await pienenna(inp.files[0], 3000);
-      const fd = new FormData(); fd.append('rivi', btn.dataset.kuva); fd.append('kuva', f); fd.append('sposti', $('sposti').checked ? '1' : '0');
-      naytaTulos('<div class="tila">Lähetetään lähikuvaa…</div>');
-      try { await lahetaKuvat('/api/kuorma/' + encodeURIComponent(t) + '/lahikuva', fd); seuraa(t); }
-      catch (e) { naytaTulos('<div class="tila virhe">' + esc(e.message) + '</div>'); }
+  // Lopuksi: Excel sähköpostiin vasta kun mahdolliset lähikuvat on lisätty
+  if (asetukset.sposti_valmis) {
+    h2 = '<div class="varoitus" style="border-left-color:var(--sin);background:#eef4fb"><b>Valmis lähetettäväksi?</b>' +
+      '<div class="pieni-teksti" style="margin:4px 0 8px">' + (u.length ? 'Lisää ensin mahdolliset lähikuvat tai uudet kuvat. ' : '') + 'Excel lähtee osoitteeseen ' + esc(asetukset.sposti) + '.</div>' +
+      '<button class="nappi" id="postita">Lähetä Excel sähköpostiin</button><div id="postiTila" class="pieni-teksti" style="margin-top:6px"></div></div>';
+    $('tulos').insertAdjacentHTML('beforeend', h2);
+    $('postita').onclick = async () => {
+      $('postita').disabled = true; $('postiTila').textContent = 'Lähetetään…';
+      try {
+        const r = await fetch('/api/kuorma/' + encodeURIComponent(t) + '/posti', {method: 'POST', headers: hdr()});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.virhe || ('Virhe ' + r.status));
+        $('postiTila').textContent = j.sposti;
+        if (/^Lähetetty/.test(j.sposti)) { kuvat.forEach(k => URL.revokeObjectURL(k.url)); kuvat = []; piirra(); } else $('postita').disabled = false;
+      } catch (e) { $('postiTila').textContent = e.message; $('postita').disabled = false; }
     };
-    inp.click();
+  }
+  document.querySelectorAll('[data-kuva]').forEach(btn => btn.onclick = () => {
+    localStorage.setItem('lahikohde', JSON.stringify({kuorma: t, rivi: btn.dataset.kuva}));
+    $('lahikamera').click();
   });
+}
+
+// Lähikuva: tiedostokenttä on aina sivulla (ei luoda tyhjästä), jotta valinta ei katoa kameran avautuessa
+$('lahikamera').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  let kohde = null; try { kohde = JSON.parse(localStorage.getItem('lahikohde')); } catch (x) {}
+  if (!file || !kohde) return;
+  naytaTulos('<div class="tila">Lähetetään lähikuvaa…</div><div class="palkki"><div style="width:15%"></div></div>');
+  try {
+    const f = await pienenna(file, 3000);
+    const fd = new FormData(); fd.append('rivi', kohde.rivi); fd.append('kuva', f); fd.append('sposti', '0');
+    await lahetaKuvat('/api/kuorma/' + encodeURIComponent(kohde.kuorma) + '/lahikuva', fd);
+    seuraa(kohde.kuorma);
+  } catch (err) { naytaTulos('<div class="tila virhe">' + esc(err.message) + '</div>'); }
+};
+
+// Jos sivu latautui uudelleen (esim. kamera sulki selaimen taustalle), palataan kuorman tilaan
+async function jatka() {
+  const t = $('tunniste').value.trim();
+  if (!t) return;
+  try {
+    const r = await fetch('/api/kuorma/' + encodeURIComponent(t) + '/tila', {headers: hdr()});
+    if (!r.ok) return;
+    const s = await r.json();
+    if (s.tila === 'valmis') piirraTulos(t, s); else if (s.tila === 'kasittelyssa') seuraa(t);
+  } catch (e) {}
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
