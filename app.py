@@ -24,6 +24,14 @@ def guard():
         return jsonify(virhe="Väärä käyttökoodi"), 401
 
 
+@app.after_request
+def no_cache(resp):
+    # sivu ja skriptit haetaan aina tuoreena (muuten selain voi näyttää vanhaa versiota tuntikausia)
+    if not request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.get("/")
 def index():
     return send_from_directory("static", "index.html")
