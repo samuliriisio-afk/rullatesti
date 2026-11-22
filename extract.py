@@ -81,15 +81,17 @@ def extract(path, barcode_text=""):
         "max_tokens": 2000,
         "system": SYSTEM,
         "tools": [TOOL],
-        "tool_choice": {"type": "tool", "name": TOOL["name"]},
+        "tool_choice": {"type": "auto"},  # pakotettu työkalu (type "tool") ei toimi kaikilla malleilla
         "messages": [{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img}},
-            {"type": "text", "text": hint + " Lue kuva ja kirjaa tiedot."},
+            {"type": "text", "text": hint + " Lue kuva ja kirjaa tiedot kutsumalla kirjaa_etiketti-työkalua. Älä vastaa tekstillä."},
         ]}],
     }
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     last = None
     for attempt in range(4):
+        if attempt:  # uusinta: muistutus työkalun käytöstä
+            body["messages"][0]["content"][-1]["text"] += " MUISTUTUS: vastaa vain kutsumalla kirjaa_etiketti-työkalua."
         try:
             r = requests.post(API_URL, headers=headers, json=body, timeout=120)
         except requests.RequestException as e:
@@ -105,4 +107,5 @@ def extract(path, barcode_text=""):
             else:
                 raise RuntimeError(f"API-virhe {r.status_code}: {r.text[:300]}")
         time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"Clauden kutsu epäonnistui: {last}")
     raise RuntimeError(f"Clauden kutsu epäonnistui: {last}")
