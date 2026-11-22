@@ -53,6 +53,9 @@
     <label for="tunniste">Kuorman tunniste</label>
     <input type="text" id="tunniste" placeholder="esim. FFF111" autocapitalize="characters" autocomplete="off">
     <div class="pieni-teksti" style="margin-top:6px">Yksi kuorma = yksi Excel. Sama tunniste lisää kuvia samaan kuormaan.</div>
+    <label for="nimi" style="margin-top:14px">Nimi</label>
+    <input type="text" id="nimi" placeholder="esim. Samuli Riisiö" autocomplete="name">
+    <div class="pieni-teksti" style="margin-top:6px">Tulee vain Excel-liitteeseen (Tiedot-välilehti).</div>
   </div>
 
   <div class="kortti">
@@ -71,6 +74,7 @@
   </div>
 
   <div class="kortti piilo" id="tulos"></div>
+  <div class="pieni-teksti" id="tekija" style="text-align:center;margin:18px 0 6px"></div>
 </main>
 
 <script>
@@ -82,6 +86,8 @@ let poll = null;
 const koodi = () => localStorage.getItem('koodi') || '';
 const hdr = () => ({'X-Koodi': koodi()});
 $('tunniste').value = localStorage.getItem('tunniste') || '';
+$('nimi').value = localStorage.getItem('nimi') || '';
+$('nimi').addEventListener('input', e => localStorage.setItem('nimi', e.target.value));
 $('koodi').value = koodi();
 $('koodi').addEventListener('input', e => localStorage.setItem('koodi', e.target.value));
 $('tunniste').addEventListener('input', e => { localStorage.setItem('tunniste', e.target.value); paivita(); });
@@ -89,6 +95,7 @@ $('tunniste').addEventListener('input', e => { localStorage.setItem('tunniste', 
 fetch('/api/asetukset').then(r => r.json()).then(a => {
   asetukset = a;
   if (a.koodi_vaaditaan) $('koodiKortti').classList.remove('piilo');
+  $('tekija').textContent = [a.tekija, a.versio ? 'versio ' + a.versio : ''].filter(Boolean).join(' · ');
   $('osoite').textContent = '(' + a.sposti + ')';
   if (!a.sposti_valmis) { $('sposti').checked = false; $('osoite').textContent = '(sähköpostia ei ole määritetty palvelimella)'; }
 });
@@ -145,6 +152,7 @@ $('laheta').onclick = async () => {
   const t = $('tunniste').value.trim();
   const fd = new FormData();
   fd.append('tunniste', t);
+  fd.append('nimi', $('nimi').value.trim());
   fd.append('sposti', $('sposti').checked ? '1' : '0');
   kuvat.forEach(k => fd.append('kuvat', k.file));
   $('laheta').disabled = true;
