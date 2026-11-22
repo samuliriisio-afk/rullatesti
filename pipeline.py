@@ -267,6 +267,40 @@ def mail_text(t, s, paivitys):
     return "\n".join(L)
 
 
+def _mail(t, summary, out, merged, params):
+    """Lähettää Excelin sähköpostiin. Palauttaa tilarivin ruudulle."""
+    d = ld(t)
+    first = not read_json(d / "tila.json", {}).get("lahetetty_kerran")
+    try:
+        size_mb = out.stat().st_size / 1e6
+        attach_path = out
+        if size_mb > 20:  # liian iso liite: lähetä kevyt versio ilman kuvia
+            light = d / f"kuorma_{t}_kevyt.xlsx"
+            B.build(merged, params, str(light), t, ilman_kuvia=True, info=make_info(t, t))
+            attach_path = light
+        mailer.send(f"Rullakuorma {t}: {summary['rullia']} rullaa" + ("" if first else " (päivitetty)"),
+                    mail_text(t, summary, not first), str(attach_path))
+        return f"Lähetetty osoitteeseen {mailer.MAIL_TO}"
+    except Exception as e:
+        return "Sähköpostin lähetys epäonnistui: " + str(e)
+
+
+def send_mail(t):
+    """Lähettää kuorman nykyisen Excelin sähköpostiin (kuvaaja painaa lopuksi 'Lähetä Excel')."""
+    with lock_for(t):
+        d = ld(t)
+        st = read_json(d / "tila.json", {})
+        if st.get("tila") != "valmis" or not st.get("yhteenveto"):
+            raise RuntimeError("Kuorma ei ole valmis")
+        out = d / f"kuorma_{t}.xlsx"
+        rows, attach, notes, retake, kaksoiskuvat = build_rows(t)
+        _, merged, warn, params = build_excel(t, rows, attach, t)
+        msg = _mail(t, st["yhteenveto"], out, merged, params)
+        extra = {"lahetetty_kerran": True} if msg.startswith("Lähetetty") else {}
+        set_status(t, sposti=msg, **extra)
+        return msg
+
+
 # ---------- koko kuorman käsittely ----------
 def process_load(t, laheta_posti=True):
     with lock_for(t):
@@ -302,20 +336,10 @@ def process_load(t, laheta_posti=True):
         summary = summarize(t, merged, warn, params, notes)
         summary["uudelleen"] = uudelleen_lista(summary, retake)
         summary["kaksoiskuvat"] = kaksoiskuvat
-        first = not read_json(d / "tila.json", {}).get("lahetetty_kerran")
         status = {"tila": "valmis", "yhteenveto": summary, "excel": out.name, "sposti": None}
         if laheta_posti:
-            try:
-                size_mb = out.stat().st_size / 1e6
-                attach_path = out
-                if size_mb > 20:  # liian iso liite: lähetä kevyt versio ilman kuvia
-                    light = d / f"kuorma_{t}_kevyt.xlsx"
-                    B.build(merged, params, str(light), t, ilman_kuvia=True, info=make_info(t, t))
-                    attach_path = light
-                mailer.send(f"Rullakuorma {t}: {summary['rullia']} rullaa" + ("" if first else " (päivitetty)"),
-                            mail_text(t, summary, not first), str(attach_path))
-                status["sposti"] = f"Lähetetty osoitteeseen {mailer.MAIL_TO}"
-                status["lahetetty_kerran"] = True
-            except Exception as e:
-                status["sposti"] = "Sähköpostin lähetys epäonnistui: " + str(e)
+            status["sposti"] = _mail(t, summary, out, merged, params)
+            status["lahetetty_kerran"] = True if status["sposti"].startswith("Lähetetty") else None
+            if status["lahetetty_kerran"] is None:
+                del status["lahetetty_kerran"]
         set_status(t, **status)

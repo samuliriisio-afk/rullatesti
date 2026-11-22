@@ -3,6 +3,14 @@
 Versiointi: pienet muutokset nostavat numeroa 0.1 -> 0.11 -> 0.12 ..., isommat muutokset 0.1 -> 0.2 -> ... -> 1.0.
 Numero on tiedostossa `version.py` ja näkyy sovelluksen alareunassa sekä Excelin Tiedot-välilehdellä.
 
+## 0.17
+- Uusi kulku: kuvat luetaan ensin ("Lue kuvat"), eikä Excel lähde vielä sähköpostiin. Kuvat pysyvät sovelluksessa (✓ = luettu), ja lähikuvat voi lisätä ennen lopullista lähetystä. Excel lähtee vasta painikkeesta "Lähetä Excel sähköpostiin".
+- Lähikuvan otto korjattu: tiedostokenttä on aina sivulla (aiemmin se luotiin napautuksessa ja valinta saattoi kadota kameran avautuessa). Jos sivu latautuu uudelleen kameran jälkeen, sovellus palaa kuorman tilaan tunnisteen perusteella.
+- Sähköpostin lähetyskytkin poistettu (lähetys on aina oma vaihe).
+
+## 0.16
+- Lukuohjeeseen lisätty Anjalankoski Mills -etiketin asettelu (UNIT NUMBER, WIDTH, LENGTH, GRAMMAGE, THICKNESS, DIAMETER, CORE, WEIGHT) ja sääntö: epäselvässä kuvassa kentät saa täyttää asettelun paikan mukaan, mutta ne merkitään epävarmoiksi ja huomautukseen tulee maininta "Täytetty etiketin asettelun mukaan, epävarma". THICKNESS (paksuus) kirjataan vain huomautukseen. Muiden tehtaiden asettelut lisätään myöhemmin.
+
 ## 0.15
 - Kuvien määrä näkyy ennen lähetystä ("Valittu N kuvaa"), jotta tuplat ja puuttuvat kuvat huomaa ajoissa.
 - "Kuvaa uudelleen" -laatikossa näkyy pikkukuva siitä kuvasta, jota ilmoitus koskee. Kuvaa napauttamalla se aukeaa isompana, ja uusi napautus sulkee sen.

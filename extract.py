@@ -34,6 +34,12 @@ KENTÄT (null jos ei näy tai ei ole luettavissa; ÄLÄ ARVAA)
 - epavarmat: lista kentistä (rullanumero, tilausnumero, ex_tilausnumero, tuotenimi, gsm, leveys, halkaisija, paino, pituus), joiden luvusta et ole varma: epäselvä käsinkirjoitus, peittyvä numero, yliviivattu paino, heikko kuva. Selitä huomautuksessa. Älä lisää listaan kenttää, jonka luit varmasti.
 - huomautus: yksi tiivis teksti, lauseet pisteellä erotettuina, tässä järjestyksessä: ensin "Käsin: …" (mitä käsin kirjoitettu ja yliviivattu), sitten muu etiketin tieto (asiakas, tilausviite, FSC/PEFC, kN, ydin, tuotekoodi, konerulla, eränumero, pahviin kirjoitetut merkinnät), sitten päiväys ISO-muodossa ("Päiväys 2025-05-12"), lopuksi tehdas ("Imatra Mills."). Epävarmuudet kuuluvat tekstiin.
 
+ETIKETTIEN ASETTELU (tehdaskohtainen; samalla tehtaalla kentät ovat aina samoissa paikoissa, eri tehtaalla paikat muuttuvat)
+- Stora Enso Anjalankoski Mills (UIB:n pääte 0205, teksti "ANJALANKOSKI MILLS"): yläreunassa tuotenimi, sen alla ORDER NUMBER -laatikko (painettu tilausnumero, perässä osanumero kuten 001; käsin kirjoitettu korjaus on usein etiketin yläreunassa). Sen alla kolmen rivin ruudukko: 1. rivi vasemmalla UNIT NUMBER (rullanumero) ja sen oikealla WIDTH (leveys, mm); 2. rivi LENGTH (pituus, m), GRAMMAGE (gsm) ja harvoin THICKNESS (µm, EI halkaisija, kirjaa vain huomautukseen jos näkyy); 3. rivi DIAMETER (halkaisija, mm), CORE (ydin, mm), TOP SIDE, JOINTS, PACKING DATE, MACHINE ROLL, SET/POSITION. Oikealla MARK-ruutu ja PLANNED AMOUNT. Oranssissa laatikossa WEIGHT (paino, kg). Alhaalla UIB-viivakoodi ja sen yläpuolella UIB-numero; etiketin vasemmassa reunassa on pystysuora viivakoodi, jonka numero on sama UIB.
+- Muiden tehtaiden asettelut lisätään myöhemmin; niiden etiketit luetaan kenttien otsikoiden mukaan.
+
+Asettelun käyttö epäselvässä kuvassa: jos kuva on epäselvä, pieni tai sumea, saat täyttää kentän sen asettelun paikan mukaan (esim. suuri numero UNIT NUMBER -paikassa) vain, kun tehdas on tunnistettavissa ja paikka erottuu kuvassa. Silloin ÄLÄ pidä lukua varmana: lisää kenttä epavarmat-listaan ja kirjoita huomautukseen virke "Täytetty etiketin asettelun mukaan, epävarma: <kentät>." Jos paikassa ei erotu mitään, jätä kenttä null.
+
 TÄRKEÄÄ
 - Käyttäjä antaa viivakoodinlukijan tuloksen. Sinun tehtäväsi on lukea vain etiketin teksti; UIB-vertailun tekee ohjelma.
 - Älä koskaan muuta lukua, jotta laskennalliset tarkistukset menisivät läpi. Kirjaa se, mitä etiketissä on.

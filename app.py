@@ -73,7 +73,7 @@ def upload():
                 added += 1
         except Exception:
             return jsonify(virhe=f"Kuvaa {f.filename} ei voitu avata"), 400
-    send_mail = request.form.get("sposti", "1") == "1"
+    send_mail = request.form.get("sposti", "0") == "1"
     nimi = request.form.get("nimi", "").strip()[:80]
     if nimi:
         P.set_meta(t, nimi=nimi)
@@ -94,8 +94,19 @@ def closeup(t):
     except Exception:
         return jsonify(virhe="Kuvaa ei voitu avata"), 400
     P.set_status(t, tila="kasittelyssa", edistyminen="0/0")
-    start(t, request.form.get("sposti", "1") == "1")
+    start(t, request.form.get("sposti", "0") == "1")
     return jsonify(tunniste=t, kuva=key)
+
+
+@app.post("/api/kuorma/<t>/posti")
+def mail_now(t):
+    t = P.safe_name(t)
+    if not (P.ld(t) / "tila.json").exists():
+        return jsonify(virhe="Kuormaa ei löydy"), 404
+    try:
+        return jsonify(sposti=P.send_mail(t))
+    except Exception as e:
+        return jsonify(virhe=str(e)), 400
 
 
 @app.get("/api/kuorma/<t>/tila")
