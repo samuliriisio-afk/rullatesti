@@ -3,6 +3,13 @@
 Versiointi: pienet muutokset nostavat numeroa 0.1 -> 0.11 -> 0.12 ..., isommat muutokset 0.1 -> 0.2 -> ... -> 1.0.
 Numero on tiedostossa `version.py` ja näkyy sovelluksen alareunassa sekä Excelin Tiedot-välilehdellä.
 
+## 0.14
+- "Lataa Excel" -painike piilotettu kuvaajalta (Excel tulee sähköpostiin).
+- Jos samasta rullasta on useampi kuva, kuvaajalle näytetään maininta, jotta hän huomaa mahdollisen kuvaamatta jääneen rullan.
+
+## 0.13
+- Kuvaajalle näytetään vain asiat, jotka korjaantuvat kuvaamalla uudelleen (UIB puuttuu tai ristiriita, etikettiä ei näy). Tarkistettavat rivit, painoerot ja huomiot jäävät vain sähköpostin yhteenvetoon ja Exceliin.
+
 ## 0.12
 - Selain ei enää välimuistita sivua: päivitykset näkyvät heti (Cache-Control: no-cache).
 

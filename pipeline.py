@@ -138,6 +138,8 @@ def build_rows(t):
     d = ld(t)
     idx = read_json(d / "indeksi.json", {"kuvat": []})
     rows, attach, notes, fixes = [], [], [], []
+    tuplat = {}   # rivin kuvatiedosto -> kuvat, joissa sama rulla on useammin kuin kerran
+    retake = {}   # kuva -> {kuva, rulla, syy, nappi}: vain asiat, jotka kuvaaja voi korjata kuvaamalla uudelleen
     for im in idx["kuvat"]:
         key = im["key"]
         res = read_json(d / "tulokset" / f"{key}.json", None)
@@ -151,9 +153,16 @@ def build_rows(t):
         kind = res.get("kuvatyyppi")
         if kind == "etiketti":
             row = make_row(key, path, res)
-            same = next((r for r in rows if row["uib_lahde"] == "Viivakoodi" and r["uib"] == row["uib"]), None)
+            bc0, tx0 = res.get("bc") or "", digits(res.get("uib_teksti"))
+            if bc0 and tx0 and bc0 != tx0:
+                retake[key] = {"kuva": key, "rulla": row.get("rullanumero"), "syy": "Viivakoodi ja sen alla oleva numero eivät täsmää", "nappi": True}
+            same = next((r for r in rows if not str(row["uib"]).startswith(PLACEHOLDER) and r["uib"] == row["uib"]), None)
             if same:   # sama rulla kuvattu uudelleen: liitetään lisäkuvaksi
                 same.setdefault("lisakuvat", []).append({"tiedosto": key, "kuva": path, "kuvaus": "sama rulla, toinen kuva"})
+                if row["uib_lahde"] == "Viivakoodi" and same["uib_lahde"] != "Viivakoodi":   # toinen kuva varmisti UIB:n viivakoodilla
+                    same["uib_lahde"] = "Viivakoodi"
+                    same["epavarmat"] = [e for e in same["epavarmat"] if e != "uib"]
+                tuplat.setdefault(same["kuvatiedosto"], [same["kuvatiedosto"]]).append(key)
             else:
                 rows.append(row)
         elif kind == "viivakoodin_lahikuva":
@@ -162,8 +171,10 @@ def build_rows(t):
                 attach.append({"uib": u, "lisakuvat": [{"tiedosto": key, "kuva": path, "kuvaus": "viivakoodin lähikuva"}]})
             else:
                 notes.append(f"Lähikuvasta {key} ei saatu viivakoodia luettua.")
+                retake[key] = {"kuva": key, "rulla": None, "syy": "Lähikuvasta ei saatu viivakoodia luettua", "nappi": False}
         else:
             notes.append(f"Kuvaa {key} ei käytetty ({'rulla kaukaa' if kind == 'rulla_kaukaa' else 'ei etikettiä'}).")
+            retake[key] = {"kuva": key, "rulla": None, "syy": "Kuvassa ei näy etikettiä luettavasti", "nappi": False}
     for im, res, path in fixes:
         row = next((r for r in rows if r["kuvatiedosto"] == im["kohde"]), None)
         bc, tx = res.get("bc") or "", digits(res.get("uib_teksti"))
@@ -172,14 +183,18 @@ def build_rows(t):
             continue
         if not (bc or tx):
             notes.append(f"Lähikuvasta {im['key']} ei saatu UIB:tä luettua (rulla {row.get('rullanumero')}).")
+            retake[im["kohde"]] = {"kuva": im["kohde"], "rulla": row.get("rullanumero"), "syy": "Lähikuvasta ei saatu UIB:tä luettua", "nappi": True}
             row.setdefault("lisakuvat", []).append({"tiedosto": im["key"], "kuva": path, "kuvaus": "lähikuva (ei luettu)"})
             continue
         row["uib"], row["uib_lahde"] = (bc or tx), ("Viivakoodi" if bc else "Teksti")
+        retake.pop(im["kohde"], None)
         row["epavarmat"] = [e for e in row["epavarmat"] if e != "uib"] + (["uib"] if (not bc) else [])
         row["huomautus"] = row["huomautus"].replace(
             "UIB:tä ei saatu luettua kuvasta: otettava lähikuva viivakoodista suoraan edestä.", "UIB luettu lähikuvasta.").strip()
         row.setdefault("lisakuvat", []).append({"tiedosto": im["key"], "kuva": path, "kuvaus": "viivakoodin lähikuva"})
-    return rows, attach, notes
+    kaksoiskuvat = [{"rulla": next((r.get("rullanumero") for r in rows if r["kuvatiedosto"] == k), None), "kuvia": len(v)}
+                    for k, v in tuplat.items()]
+    return rows, attach, notes, list(retake.values()), kaksoiskuvat
 
 
 def make_info(t, kuorma_nimi):
@@ -223,6 +238,14 @@ def summarize(t, merged, warn, params, notes):
             huomiot.append(w["text"])
     return {"rullia": len(merged), "paino_yht": sum(int(r["paino"]) for r in merged if isinstance(r.get("paino"), (int, float))),
             "tarkistettavat": tark, "paino_ei_ok": ei_ok, "ilman_uib": ilman_uib, "huomiot": huomiot}
+
+
+def uudelleen_lista(summary, retake):
+    """Kuvaajalle näytettävät asiat: vain ne, jotka korjaantuvat kuvaamalla uudelleen."""
+    out = [{"kuva": x["kuva"], "rulla": x["rulla"], "syy": "UIB puuttuu", "nappi": True} for x in summary["ilman_uib"]]
+    seen = {x["kuva"] for x in out}
+    out += [x for x in retake if x["kuva"] not in seen]
+    return out
 
 
 def mail_text(t, s, paivitys):
@@ -271,12 +294,14 @@ def process_load(t, laheta_posti=True):
         if todo and errs and len(errs) == len(todo):
             set_status(t, tila="virhe", virhe="Kuvien luku epäonnistui: " + str(errs[0]))
             return
-        rows, attach, notes = build_rows(t)
+        rows, attach, notes, retake, kaksoiskuvat = build_rows(t)
         if not rows:
             set_status(t, tila="virhe", virhe="Kuvista ei löytynyt yhtään rullan etikettiä.")
             return
         out, merged, warn, params = build_excel(t, rows, attach, t)
         summary = summarize(t, merged, warn, params, notes)
+        summary["uudelleen"] = uudelleen_lista(summary, retake)
+        summary["kaksoiskuvat"] = kaksoiskuvat
         first = not read_json(d / "tila.json", {}).get("lahetetty_kerran")
         status = {"tila": "valmis", "yhteenveto": summary, "excel": out.name, "sposti": None}
         if laheta_posti:
