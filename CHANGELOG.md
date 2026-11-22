@@ -3,6 +3,12 @@
 Versiointi: pienet muutokset nostavat numeroa 0.1 -> 0.11 -> 0.12 ..., isommat muutokset 0.1 -> 0.2 -> ... -> 1.0.
 Numero on tiedostossa `version.py` ja näkyy sovelluksen alareunassa sekä Excelin Tiedot-välilehdellä.
 
+## 0.15
+- Kuvien määrä näkyy ennen lähetystä ("Valittu N kuvaa"), jotta tuplat ja puuttuvat kuvat huomaa ajoissa.
+- "Kuvaa uudelleen" -laatikossa näkyy pikkukuva siitä kuvasta, jota ilmoitus koskee. Kuvaa napauttamalla se aukeaa isompana, ja uusi napautus sulkee sen.
+- Uudelleenyritykset 4 -> 3.
+- Valinnainen Haiku-ensin-luku lisätty, mutta se on oletuksena pois (`FAST_MODEL=off`), koska vertailussa se ohitti yhden epävarman rullanumeron. Luku toimii siis kuten versiossa 0.14.
+
 ## 0.14
 - "Lataa Excel" -painike piilotettu kuvaajalta (Excel tulee sähköpostiin).
 - Jos samasta rullasta on useampi kuva, kuvaajalle näytetään maininta, jotta hän huomaa mahdollisen kuvaamatta jääneen rullan.

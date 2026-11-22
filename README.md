@@ -27,6 +27,8 @@ Aja aina vain yhdellä prosessilla (`-w 1`), koska kuormien lukitus on prosessin
 | Muuttuja | Merkitys |
 |---|---|
 | `ANTHROPIC_API_KEY` | Anthropic API -avain (console.anthropic.com). Käyttö laskutetaan kuvien mukaan. |
+| `FAST_MODEL` | valinnainen, oletus `off`: halpa malli (esim. `claude-haiku-5-5`) lukee ensin, epävarmat luetaan uudelleen `CLAUDE_MODEL`:lla. Kokeilussa Haiku ohitti yhden epävarman rullanumeron, joten oletus on pois |
+| `API_IMAGE_MAX_SIDE` / `API_IMAGE_MAX_SIDE_STRONG` | kuvan pisin sivu (px) Clauden luvussa, oletus 2000. Pienempi arvo (esim. 1600) säästää kuluja mutta voi heikentää tekstin luettavuutta |
 | `CLAUDE_MODEL` | oletus `claude-sonnet-5-5`; `claude-opus-5-5` on tarkempi mutta kalliimpi |
 | `APP_CODE` | käyttökoodi, jonka sovellus kysyy puhelimessa. Pakollinen, jos palvelin on julkinen. |
 | `MAIL_TO` | vastaanottaja (oletus samuli.riisio@nurminenlogistics.com) |

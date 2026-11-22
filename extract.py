@@ -4,8 +4,16 @@ import requests
 from PIL import Image, ImageOps
 
 API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5-5")
+# Valinnainen kaksivaiheinen luku (OLETUKSENA POIS KÄYTÖSTÄ): jos FAST_MODEL on asetettu (esim. claude-haiku-5-5),
+# nopea halpa malli lukee ensin ja vain epävarmat kuvat luetaan uudelleen tarkalla mallilla (CLAUDE_MODEL).
+# Vertailussa (kuorma XXX357) Haiku jätti yhden epävarman rullanumeron merkitsemättä, joten tila on pois.
+# Jos otat sen käyttöön ja ongelmia ilmaantuu: aseta FAST_MODEL=off.
+# Kuvan pisin sivu pikseleinä: API_IMAGE_MAX_SIDE (nopea vaihe) ja API_IMAGE_MAX_SIDE_STRONG (tarkka vaihe).
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-5-5")           # tarkka malli
+FAST_MODEL = os.environ.get("FAST_MODEL", "off").strip()  # nopea malli; "off" = ei käytössä
 MAX_SIDE = int(os.environ.get("API_IMAGE_MAX_SIDE", "2000"))
+MAX_SIDE_STRONG = int(os.environ.get("API_IMAGE_MAX_SIDE_STRONG", "2000"))
+ATTEMPTS = 3
 
 SYSTEM = """Luet paperi- ja kartonkirullien etikettikuvia (Stora Enso Imatra/Anjalankoski/Oulu/Varkaus, MM Kotkamills, muut valmistajat) ja kirjaat tiedot kirjaa_etiketti-työkalulla. Kirjoita huomautus suomeksi.
 
@@ -68,16 +76,16 @@ def prep_image(path, max_side=MAX_SIDE):
     return buf.getvalue()
 
 
-def extract(path, barcode_text=""):
-    """Palauttaa työkalukutsun syötteen (dict). Nostaa RuntimeErrorin, jos API ei vastaa."""
+def call(model, max_side, path, barcode_text=""):
+    """Yksi lukukierros annetulla mallilla. Palauttaa työkalukutsun syötteen (dict). Nostaa RuntimeErrorin, jos API ei vastaa."""
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise RuntimeError("ANTHROPIC_API_KEY puuttuu")
-    img = base64.b64encode(prep_image(path)).decode()
+    img = base64.b64encode(prep_image(path, max_side)).decode()
     hint = (f"Viivakoodinlukija luki tästä kuvasta numeron {barcode_text}." if barcode_text
             else "Viivakoodinlukija ei saanut kuvasta viivakoodia luettua.")
     body = {
-        "model": MODEL,
+        "model": model,
         "max_tokens": 2000,
         "system": SYSTEM,
         "tools": [TOOL],
@@ -89,7 +97,7 @@ def extract(path, barcode_text=""):
     }
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     last = None
-    for attempt in range(4):
+    for attempt in range(ATTEMPTS):
         if attempt:  # uusinta: muistutus työkalun käytöstä
             body["messages"][0]["content"][-1]["text"] += " MUISTUTUS: vastaa vain kutsumalla kirjaa_etiketti-työkalua."
         try:
@@ -108,3 +116,43 @@ def extract(path, barcode_text=""):
                 raise RuntimeError(f"API-virhe {r.status_code}: {r.text[:300]}")
         time.sleep(2 * (attempt + 1))
     raise RuntimeError(f"Clauden kutsu epäonnistui: {last}")
+
+
+def _digits(s):
+    return "".join(c for c in (s or "") if c.isdigit())
+
+
+def uncertain(res, barcode_text):
+    """Kelpaako nopean mallin tulos sellaisenaan? True = lue uudelleen tarkalla mallilla."""
+    kind = res.get("kuvatyyppi")
+    tx = _digits(res.get("uib_teksti"))
+    if kind == "viivakoodin_lahikuva":
+        return not tx or (bool(barcode_text) and tx != barcode_text)
+    if kind != "etiketti":
+        return True   # muu kuin etiketti: varmistetaan, ettei rulla jää huomaamatta
+    if res.get("epavarmat"):
+        return True
+    for k in ("rullanumero", "tilausnumero", "tuotenimi", "gsm", "leveys", "halkaisija", "paino", "pituus"):
+        if res.get(k) in (None, ""):
+            return True
+    if barcode_text and tx != barcode_text:
+        return True   # viivakoodi ja alla oleva numero eivät täsmää
+    if not barcode_text and not tx:
+        return True
+    return False
+
+
+def extract(path, barcode_text=""):
+    if FAST_MODEL and FAST_MODEL.lower() != "off" and FAST_MODEL != MODEL:
+        try:
+            res = call(FAST_MODEL, MAX_SIDE, path, barcode_text)
+            if not uncertain(res, barcode_text):
+                res["_malli"] = FAST_MODEL
+                return res
+        except RuntimeError as e:
+            if "ANTHROPIC_API_KEY" in str(e):
+                raise
+            # nopea malli ei vastannut (esim. mallin nimi väärin): jatketaan tarkalla mallilla
+    res = call(MODEL, MAX_SIDE_STRONG, path, barcode_text)
+    res["_malli"] = MODEL
+    return res

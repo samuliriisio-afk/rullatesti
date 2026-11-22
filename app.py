@@ -112,5 +112,25 @@ def excel(t):
     return send_file(p, as_attachment=True, download_name=p.name)
 
 
+@app.get("/api/kuorma/<t>/kuva/<key>")
+def picture(t, key):
+    """Kuorman kuva esikatselua varten: ?koko=pieni (pikkukuva) tai iso."""
+    import io, re as _re
+    from PIL import Image
+    t = P.safe_name(t)
+    if not _re.fullmatch(r"k\d{1,5}", key):
+        abort(404)
+    p = P.ld(t) / "kuvat" / f"{key}.jpg"
+    if not p.exists():
+        abort(404)
+    side = 260 if request.args.get("koko") == "pieni" else 1600
+    im = Image.open(p).convert("RGB")
+    im.thumbnail((side, side))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=80)
+    buf.seek(0)
+    return send_file(buf, mimetype="image/jpeg")
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
