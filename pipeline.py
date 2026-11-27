@@ -229,7 +229,14 @@ def build_rows(t):
             retake[im["kohde"]] = {"kuva": im["kohde"], "rulla": row.get("rullanumero"), "syy": "Lähikuvasta ei saatu UIB:tä luettua", "nappi": True}
             row.setdefault("lisakuvat", []).append({"tiedosto": im["key"], "kuva": path, "kuvaus": "lähikuva (ei luettu)"})
             continue
-        row["uib"], row["uib_lahde"] = (bc or tx), ("Viivakoodi" if bc else "Teksti")
+        newu = bc or tx
+        other = next((r for r in rows if r is not row and r["uib"] == newu), None)
+        if other is not None:   # sama UIB kuuluu jo toiselle rullalle: ei yhdistetä rullia, vaan pyydetään oikea lähikuva
+            notes.append(f"Lähikuvan {im['key']} UIB {newu} kuuluu jo rullalle {other.get('rullanumero')}; ei käytetty rullalle {row.get('rullanumero')}.")
+            retake[im["kohde"]] = {"kuva": im["kohde"], "rulla": row.get("rullanumero"), "syy": "Lähikuvan viivakoodi on sama kuin toisella rullalla, kuvaa tämän rullan oma viivakoodi", "nappi": True}
+            row.setdefault("lisakuvat", []).append({"tiedosto": im["key"], "kuva": path, "kuvaus": "lähikuva (UIB kuului toiselle rullalle, ei käytetty)"})
+            continue
+        row["uib"], row["uib_lahde"] = newu, ("Viivakoodi" if bc else "Teksti")
         merge_closeup(row, res)
         retake.pop(im["kohde"], None)
         row["epavarmat"] = [e for e in row["epavarmat"] if e != "uib"] + (["uib"] if (not bc) else [])

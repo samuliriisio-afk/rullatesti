@@ -98,6 +98,26 @@ def closeup(t):
     return jsonify(tunniste=t, kuva=key)
 
 
+@app.post("/api/kuorma/<t>/lahikuvat")
+def closeups(t):
+    """Usea lähikuva kerralla: kentät 'kuvat' ja 'rivit' (samassa järjestyksessä). Luku käynnistetään vain kerran."""
+    t = P.safe_name(t)
+    files = request.files.getlist("kuvat")
+    targets = request.form.getlist("rivit")
+    if not files or len(files) != len(targets):
+        return jsonify(virhe="Kuvat tai rivit puuttuvat"), 400
+    added = 0
+    for f, target in zip(files, targets):
+        try:
+            if P.add_image(t, f.read(), f.filename, kohde=target):
+                added += 1
+        except Exception:
+            return jsonify(virhe="Lähikuvaa ei voitu avata"), 400
+    P.set_status(t, tila="kasittelyssa", edistyminen="0/0")
+    start(t, False)
+    return jsonify(tunniste=t, lisatty=added)
+
+
 @app.post("/api/kuorma/<t>/posti")
 def mail_now(t):
     t = P.safe_name(t)

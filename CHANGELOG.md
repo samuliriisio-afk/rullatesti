@@ -3,14 +3,19 @@
 Versiointi: pienet muutokset nostavat numeroa 0.1 -> 0.11 -> 0.12 ..., isommat muutokset 0.1 -> 0.2 -> ... -> 1.0.
 Numero on tiedostossa `version.py` ja näkyy sovelluksen alareunassa sekä Excelin Tiedot-välilehdellä.
 
-## 0.18
+## 0.19
+(Sisältää kaiken, mikä oli aiemmin kirjattu versioksi 0.18.)
 - Lähikuvasta luetaan UIB:n lisäksi muutkin kentät, jos ne erottuvat siinä: tyhjä tai epävarma kenttä täydennetään lähikuvan varmalla luvulla, ja huomautukseen kirjataan "Lähikuvasta täydennetty: …" tai "Lähikuva varmisti: …". Jos lähikuvan luku poikkeaa alkuperäisestä, käytetään lähikuvan lukua, kenttä merkitään epävarmaksi ja molemmat luvut kirjataan huomautukseen.
 - Lukuohjeeseen lisätty sääntö: lähempää otettu etiketin kuva, jossa on muitakin kenttiä, luetaan etiketiksi.
 - Automaattinen lähetys: jos ruudulla ei ole huomautettavaa (ei "Kuvaa uudelleen" eikä "Sama rulla kuvattu useammin kuin kerran"), Excel lähtee sähköpostiin ilman painallusta. Jos huomautuksia on, "Lähetä Excel sähköpostiin" -painike jää käyttöön. Jo lähetettyä tilaa ei lähetetä uudelleen sivun päivityksessä, ja epäonnistunut lähetys ei toistu itsestään.
 
-## 0.18 (lisäys)
 - Valintaruutu "Lähetä automaattisesti, kun huomautettavaa ei ole" (oletuksena päällä, valinta jää puhelimen muistiin). Ruksi pois: Excel lähtee vain painikkeesta.
 - Otetut kuvat tallennetaan puhelimen muistiin (IndexedDB): lähettämättömät ja luetut kuvat säilyvät, vaikka näyttö sammuu tai selain lataa sivun uudelleen. Muisti tyhjenee, kun Excel on lähetetty. Kun aloitat uuden kuorman (eri tunniste), vanhan kuorman luetut kuvat poistuvat listalta.
+
+- Kun Excel on jo lähetetty eikä kuormaan ole tullut muutoksia, sivun uudelleenlatauksessa ei enää näytetä "Valmis lähetettäväksi?" -kehotetta.
+
+- Lähikuvat jonoon: lähikuva ei enää lähde heti. Kuvaaja voi ottaa kaikki tarvittavat lähikuvat peräkkäin ("✓ Lähikuva otettu, odottaa lukua"), ja ne luetaan yhdellä painalluksella ("Lue N lähikuvaa"). Jono säilyy puhelimen muistissa, ja saman rullan lähikuvan voi ottaa uudelleen.
+- Korjaus: jos lähikuvan UIB oli sama kuin jo toisella rullalla, rivit yhdistyivät Excelissä ja rullia jäi vähemmän (3 -> 2). Nyt tällaista lähikuvaa ei käytetä, rullat säilyvät erillisinä ja kuvaajaa pyydetään ottamaan kyseisen rullan oma viivakoodi.
 
 ## 0.17
 - Uusi kulku: kuvat luetaan ensin ("Lue kuvat"), eikä Excel lähde vielä sähköpostiin. Kuvat pysyvät sovelluksessa (✓ = luettu), ja lähikuvat voi lisätä ennen lopullista lähetystä. Excel lähtee vasta painikkeesta "Lähetä Excel sähköpostiin".
